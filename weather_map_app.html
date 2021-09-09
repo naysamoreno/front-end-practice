@@ -1,9 +1,259 @@
-<!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+OCTYPE html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <title>Title</title>
+    <meta charset="UTF-8">
+    <title>Weather Map</title>
+    <script src="https://kit.fontawesome.com/968ac4e7b1.js" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <link href='https://api.mapbox.com/mapbox-gl-js/v2.2.0/mapbox-gl.css' rel='stylesheet' />
+    <script src="js/keys.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+    <script src='https://api.mapbox.com/mapbox-gl-js/v2.2.0/mapbox-gl.js'></script>
+    <script src="js/mapbox-geocoder-utils.js"></script>
+    <style>
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        body {
+            display: flex;
+            flex-direction: column;
+            background-color: #f7f7f7;
+            height: 100vh;
+        }
+        #header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            color: #2632c3;
+            background: #bbdfffa3;
+            backdrop-filter: blur(10px);
+            font-weight: bold;
+        }
+        #results, #display {
+            z-index: 10;
+            pointer-events: none;
+        }
+        .clickable {
+            cursor: pointer;
+        }
+        #map{
+            width: 100%;
+            height: 100%;
+            position: fixed;
+            top: 0;
+        }
+    </style>
 </head>
 <body>
+<div id="header" style="z-index: 20;">
+    <h3> Codeup Weather App - 5 Day Forecast </h3>
+    <i class="fas fa-cloud-sun fa-lg clickable"></i>
+    <div>
+        <label for="input">Place:</label>
+        <input type="text" id="input">
+        <button class="btn btn-primary" id="btn">Find</button>
+    </div>
+</div>
+<h4 id="results" ></h4>
+<div id="display"></div>
+<div  id="map"></div>
+
+<script>
+    "use strict"
+    mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
+    var map = new mapboxgl.Map({
+        container: 'map', // container ID
+        style: 'mapbox://styles/mapbox/streets-v11', // style URL
+        center: [-98.4936, 29.4241], // starting position [lng, lat]
+        zoom: 8 // starting zoom
+    });
+    var marker = new mapboxgl.Marker({
+        color: 'blue',
+        draggable: true
+    })
+        .setLngLat([-98.4936, 29.4241])
+        .addTo(map);
+
+    // variables
+    var display = $('#display').css({display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', padding: '0 8px'})
+    var mapContainer = $('#map')
+    var results = $('#results')
+    var searchInput = $("#input")
+    // CSS for Results
+    results.html('Results for: San Antonio').css({
+        color: '#003880',
+        margin: '20px',
+        display: 'flex',
+        gap: '20px',
+        justifyContent: 'center',
+        textAlign: 'center',
+        fontWeight: 'bolder',
+        textShadow: 'rgb(153 167 175) -2px -1px 10px'
+    })
+    // jQuery animation properties
+    //visible
+    var fadein = {
+        opacity: 1
+    }
+    //transparent
+    var fadeout = {
+        opacity: 0
+    }
+
+    // Map event listeners
+    mapContainer.focusin(function () {
+        results.animate(fadeout, 500);
+        display.animate(fadeout, 500);
+    })
+    mapContainer.focusout(function () {
+        results.animate(fadein, 500);
+        display.animate(fadein, 500);
+    })
+
+    function showResults() {
+        // Takes focus away from map to show results
+        $('#input').focus();
+    }
+
+    marker.on('dragend', function(e) {
+        // Object destructuring
+        // var lngLat = marker.getlnglat()
+        // var lng = lnglat.oblng
+        // var lat = lnglat.lat
+        var {lat, lng} = marker.getLngLat();
+        console.log({lat, lng})
+        getWeatherCoordinates({lat, lng});
+
+        //JS for results using dragged marker
+        results.html('')
+        results.append(
+            $('<div/>').append('Results for: '),
+            $('<div/>').append('latitude: ', lat),
+            $('<div/>').append('longitude: ', lng),
+        )
+    })
+
+    function getResults() {
+        var userInput = searchInput.val();
+        if(userInput) {
+            geocode(userInput, MAPBOX_ACCESS_TOKEN).then(function (info) {
+                // ES6: var [lng, lat] = info
+                var lng = info[0]
+                var lat = info[1]
+                var newCenter = { lng, lat }
+                console.log(newCenter)
+                getWeatherCoordinates(newCenter)
+                marker.setLngLat(newCenter);
+                map.flyTo({center: newCenter});
+            });
+            results.html('Results for: ' + userInput)
+        }
+    }
+
+    $("#btn").click(getResults);
+    var dateContainer = {
+        fontFamily: 'arial',
+        fontsize: '20px',
+        borderRadius: '20px',
+        background: '#bbdfffa3',
+        padding: '20px 0'
+    }
+    function Label(text) {
+        return $('<label/>').append(text).css({ fontWeight: 'bolder' })
+    }
+
+    //
+    function Spinner(width='100px') {
+        return $('<div/>').css({
+            borderTop: '3px solid #0CB1C4',
+            borderLeft: '3px solid #0CB1C4',
+            borderRadius: '50%',
+            width,
+            height: width,
+            margin: '20px',
+            animation: '0.4s ease-in-out 0s infinite normal none running spin'
+        })
+    }
+    // var coordinates = [29.4241, -98.4936];
+    // // var coordinates = [];
+    // $.ajax('https://api.openweathermap.org/data/2.5/onecall?units=imperial&lat=' + coordinates[0] + '&lon=' + coordinates[1] + '&appid=' + WEATHER_MAP_TOKEN)
+    //     .done(function (resp) {
+    //         console.log(resp);
+    //         var today = resp.daily[0];
+    //         var todayDate = new Date(today.dt * 1000)
+    //         console.log(todayDate);
+    //     });
+    function getWeatherCoordinates({lat, lng}) {
+        showResults();
+        display.html(Spinner());
+        $.get('https://api.openweathermap.org/data/2.5/onecall', {
+            APPID: WEATHER_MAP_TOKEN,
+            lat,
+            lon: lng,
+            units: "imperial"
+        }).done(function (resp) {
+            console.log('5 day forcast', resp);
+            display.html('');
+            resp.daily.slice(0, 5).forEach(function (today, index) {
+                var container = $('<div/>').attr({id: 'data-' + (index + 1)}).css({
+                    textAlign: 'center',
+                    border: '2px solid #a4a4a4',
+                    borderRadius: '20px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '16px',
+                    width: '300px',
+                    flex: '1 1 250px',
+                    background: '#ffffff21',
+                    opacity: 0, // starts invisibe so animation can fade in
+                    'backdrop-filter': 'blur(10px)'
+                })
+                // ES6
+                var {humidity, wind_speed, pressure, temp, weather, dt} = today
+                display.append(container.append(
+                    $('<div/>').append(new Date(dt * 1000).toDateString()).css(dateContainer),
+                    $('<div/>').css({ paddingBottom: '10px', borderBottom: '1px solid #a4a4a4' }).append(parseInt(temp.day), '°'),
+                    // string interpelation when using the ` backtic you can insert ${} jquery without concatinating
+                    $(`<img style='width: 60px; margin: auto' src="http://openweathermap.org/img/w/${weather[0].icon}.png"/>`),
+                    $('<div/>').css({padding: '10px'}).append(Label('Description:'),' ', weather[0].description),
+                    $('<div/>').append(Label('Humidity: '), humidity),
+                    $('<div/>').append(Label('Wind: '), wind_speed),
+                    $('<div/>').append(Label('Pressure: '), pressure),
+                ))
+                // fade in opacity to 1
+                container.animate(fadein, 500)
+            })
+        });
+    }
+    getWeatherCoordinates({
+        lat: 29.4241,
+        lng: -98.4936,
+    })
+    //David Walsh Blog: https://davidwalsh.name › javascript-debounce-function
+    // Function that wraps another function and calls it after a specified time
+    // Every time the debounced function is called it resets the timer
+    function debounce(func, wait, immediate) {
+        var timeout;
+        return function() {
+            var context = this, args = arguments;
+            var later = function() {
+                timeout = null;
+                if (!immediate) func.apply(context, args);
+            };
+            var callNow = immediate && !timeout;
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+            if (callNow) func.apply(context, args);
+        };
+    }
+    // calls getResults 1 second after the last time it was called
+    var getWeather = debounce(getResults, 1000);
+    // resets every time a key is released
+    searchInput.keyup(getWeather);
+
+</script>
 </body>
 </html>
